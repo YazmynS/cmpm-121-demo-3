@@ -43,11 +43,16 @@ function spawnCache(i: number, j: number) {
     [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
     [origin.lat + (i + 1) * TILE_DEGREES, origin.lng + (j + 1) * TILE_DEGREES],
   ]);
+  //Determine a number of coins per cache
+  const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
+    1;
 
   //Rectangles represent cache
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
-  rect.bindPopup(`Cache located at cell (${i}, ${j})`);
+  rect.bindPopup(
+    `Cache located at cell (${i}, ${j}) <br>Coins available: ${numCoins}`,
+  );
 }
 
 // Create Potential Cache Locations
