@@ -13,10 +13,9 @@ const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 let playerCoins = 0;
 
-// Flyweight cache for coordinate conversion
+// Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
 
-// Function to convert latitude and longitude to global grid coordinates anchored at Null Island
 function latLngToGridCoords(
   lat: number,
   lng: number,
@@ -26,7 +25,6 @@ function latLngToGridCoords(
   return { i, j };
 }
 
-// Flyweight pattern implementation: Get or create cell coordinates
 function getOrCreateCell(lat: number, lng: number) {
   const key = `${lat},${lng}`;
   if (cellCache.has(key)) {
@@ -40,7 +38,7 @@ function getOrCreateCell(lat: number, lng: number) {
   }
 }
 
-// Function to format a coin's ID for display
+// Coin Serialization
 function formatCoinID(coin: { i: number; j: number; serial: number }): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
@@ -55,6 +53,7 @@ const map = leaflet.map(document.getElementById("map")!, {
   scrollWheelZoom: false,
 });
 
+// Add Map Image
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -89,7 +88,7 @@ function spawnCache(lat: number, lng: number) {
     serial,
   }));
 
-  // Log each coin's unique ID using the formatted display
+  // Display Coin IDs
   coins.forEach((coin) => console.log(`Coin ID: ${formatCoinID(coin)}`));
 
   // Store cache data (location, coins, bounds)
@@ -104,7 +103,7 @@ function spawnCache(lat: number, lng: number) {
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
-  // Popup Content with Deposit and Collect functionality
+  // Popup Content
   const updatePopupContent = () => {
     const coinIDs = cache.coins.map((coin) => formatCoinID(coin)).join(", ");
     return `Cache located at cell (${i}, ${j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
@@ -115,7 +114,7 @@ function spawnCache(lat: number, lng: number) {
   };
   rect.bindPopup(updatePopupContent);
 
-  // Handle Collection and Deposit Functionality
+  // Handle Collection Functionality
   rect.on("popupopen", () => {
     // Collect Button
     const collectButton = document.getElementById(`collect-button-${i}-${j}`);
@@ -132,7 +131,7 @@ function spawnCache(lat: number, lng: number) {
       });
     }
 
-    // Deposit Button
+    // Handle Deposit Functionality
     const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
     if (depositButton) {
       depositButton.addEventListener("click", () => {
@@ -146,8 +145,8 @@ function spawnCache(lat: number, lng: number) {
           return;
         }
 
+        //Confirm player can deposit
         if (playerCoins >= depositAmount) {
-          // Deduct from player coins and add to cache
           playerCoins -= depositAmount;
           for (let serial = 0; serial < depositAmount; serial++) {
             cache.coins.push({ i, j, serial: cache.coins.length });
@@ -160,7 +159,7 @@ function spawnCache(lat: number, lng: number) {
           alert("You don't have enough coins to deposit that amount.");
         }
 
-        // Clear the input after the deposit
+        // Clear the input after
         depositInput.value = "";
       });
     }
@@ -181,5 +180,5 @@ function generateCacheLocations() {
   }
 }
 
-// Generate caches around the player's initial location
+// Generate caches around the player's location
 generateCacheLocations();
