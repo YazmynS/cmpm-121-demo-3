@@ -12,6 +12,7 @@ const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 let playerCoins = 0;
+let playerPosition = OAKES_CLASSROOM; // Track player position
 
 // Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
@@ -67,6 +68,49 @@ const playerMarker = leaflet.marker(OAKES_CLASSROOM);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+// Function to update player position and marker
+function movePlayer(dLat: number, dLng: number) {
+  playerPosition = leaflet.latLng(
+    playerPosition.lat + dLat,
+    playerPosition.lng + dLng,
+  );
+  playerMarker.setLatLng(playerPosition);
+  map.setView(playerPosition);
+}
+
+// Create movement buttons dynamically
+const controlsDiv = document.createElement("div");
+controlsDiv.id = "controlsDiv"; // Assign ID for CSS styling
+
+// Define and add buttons
+const buttonUp = document.createElement("button");
+buttonUp.innerText = "⬆️";
+buttonUp.className = "control-button"; // Apply shared button styling
+buttonUp.onclick = () => movePlayer(TILE_DEGREES, 0);
+
+const buttonDown = document.createElement("button");
+buttonDown.innerText = "⬇️";
+buttonDown.className = "control-button";
+buttonDown.onclick = () => movePlayer(-TILE_DEGREES, 0);
+
+const buttonLeft = document.createElement("button");
+buttonLeft.innerText = "⬅️";
+buttonLeft.className = "control-button";
+buttonLeft.onclick = () => movePlayer(0, -TILE_DEGREES);
+
+const buttonRight = document.createElement("button");
+buttonRight.innerText = "➡️";
+buttonRight.className = "control-button";
+buttonRight.onclick = () => movePlayer(0, TILE_DEGREES);
+
+// Arrange and append buttons
+controlsDiv.appendChild(buttonUp);
+controlsDiv.appendChild(buttonLeft);
+controlsDiv.appendChild(buttonRight);
+controlsDiv.appendChild(buttonDown);
+
+document.body.appendChild(controlsDiv);
+
 // Create and Display Caches at a location
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
@@ -79,27 +123,15 @@ function spawnCache(lat: number, lng: number) {
     [lat + TILE_DEGREES, lng + TILE_DEGREES],
   ]);
 
-  // Determine a number of coins per cache
   const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
     1;
-  const coins = Array.from({ length: numCoins }, (_, serial) => ({
-    i,
-    j,
-    serial,
-  }));
-
-  // Display Coin IDs
+  const coins = Array.from(
+    { length: numCoins },
+    (_, serial) => ({ i, j, serial }),
+  );
   coins.forEach((coin) => console.log(`Coin ID: ${formatCoinID(coin)}`));
 
-  // Store cache data (location, coins, bounds)
-  const cache = {
-    i,
-    j,
-    coins,
-    bounds,
-  };
-
-  // Rectangles represent cache
+  const cache = { i, j, coins, bounds };
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
@@ -114,9 +146,7 @@ function spawnCache(lat: number, lng: number) {
   };
   rect.bindPopup(updatePopupContent);
 
-  // Handle Collection Functionality
   rect.on("popupopen", () => {
-    // Collect Button
     const collectButton = document.getElementById(`collect-button-${i}-${j}`);
     if (collectButton) {
       collectButton.addEventListener("click", () => {
@@ -124,14 +154,13 @@ function spawnCache(lat: number, lng: number) {
           playerCoins += cache.coins.length;
           cache.coins = [];
           alert(`Collected! You now have ${playerCoins} coins.`);
-          rect.setPopupContent(updatePopupContent()); // Refresh the popup with updated coin count
+          rect.setPopupContent(updatePopupContent());
         } else {
           alert("No coins left in this cache.");
         }
       });
     }
 
-    // Handle Deposit Functionality
     const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
     if (depositButton) {
       depositButton.addEventListener("click", () => {
@@ -145,7 +174,6 @@ function spawnCache(lat: number, lng: number) {
           return;
         }
 
-        //Confirm player can deposit
         if (playerCoins >= depositAmount) {
           playerCoins -= depositAmount;
           for (let serial = 0; serial < depositAmount; serial++) {
@@ -154,12 +182,10 @@ function spawnCache(lat: number, lng: number) {
           alert(
             `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
           );
-          rect.setPopupContent(updatePopupContent()); // Refresh the popup with updated coin count
+          rect.setPopupContent(updatePopupContent());
         } else {
           alert("You don't have enough coins to deposit that amount.");
         }
-
-        // Clear the input after
         depositInput.value = "";
       });
     }
@@ -172,7 +198,6 @@ function generateCacheLocations() {
     for (let j = -NEIGHBORHOOD_SIZE; j <= NEIGHBORHOOD_SIZE; j++) {
       const lat = OAKES_CLASSROOM.lat + i * TILE_DEGREES;
       const lng = OAKES_CLASSROOM.lng + j * TILE_DEGREES;
-      // Determine if a cache should be spawned at this grid cell
       if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
         spawnCache(lat, lng);
       }

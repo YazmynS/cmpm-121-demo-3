@@ -1,4 +1,4 @@
-root {
+:root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -48,6 +48,7 @@ h1 {
   height: 80vh;
 }
 
+/* General button styles */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -69,6 +70,36 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Styles for movement button layout */
+#controlsDiv {
+  display: flex; /* Align buttons in a single row */
+  flex-direction: row;
+  align-items: center;
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+  gap: 10px; /* Space between buttons */
+}
+
+/* Individual control button styling */
+.control-button {
+  width: 50px;
+  height: 50px;
+  font-size: 1.5em;
+  color: white;
+  background-color: #1a1a1a;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+.control-button:hover {
+  border-color: #646cff;
+}
+
+/* Light mode adjustments */
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
@@ -81,5 +112,10 @@ button:focus-visible {
 
   button {
     background-color: #f9f9f9;
+  }
+
+  .control-button {
+    background-color: #f9f9f9;
+    color: #213547;
   }
 }
