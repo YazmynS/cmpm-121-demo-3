@@ -122,14 +122,22 @@ function spawnCache(i: number, j: number) {
 
 // Create Potential Cache Locations
 function generateCacheLocations() {
+  const totalCells = (2 * NEIGHBORHOOD_SIZE + 1) ** 2;
+  let cacheCount = 0;
+
   for (let i = -NEIGHBORHOOD_SIZE; i <= NEIGHBORHOOD_SIZE; i++) {
     for (let j = -NEIGHBORHOOD_SIZE; j <= NEIGHBORHOOD_SIZE; j++) {
       // Determine if a cache should be spawned at this grid cell
       if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
         spawnCache(i, j);
+        cacheCount++;
       }
     }
   }
+  //Confirm 10% cell placement
+  console.log(
+    `Percentage of cells with caches: ${(cacheCount / totalCells) * 100}%`,
+  );
 }
 
 // Generate caches around the player's initial location
