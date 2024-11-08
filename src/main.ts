@@ -40,6 +40,11 @@ function getOrCreateCell(lat: number, lng: number) {
   }
 }
 
+// Function to format a coin's ID for display
+function formatCoinID(coin: { i: number; j: number; serial: number }): string {
+  return `${coin.i}:${coin.j}#${coin.serial}`;
+}
+
 // Create Map
 const map = leaflet.map(document.getElementById("map")!, {
   center: OAKES_CLASSROOM,
@@ -84,10 +89,8 @@ function spawnCache(lat: number, lng: number) {
     serial,
   }));
 
-  // Log each coin's unique ID
-  coins.forEach((coin) =>
-    console.log(`Coin ID: ${coin.i}:${coin.j}#${coin.serial}`)
-  );
+  // Log each coin's unique ID using the formatted display
+  coins.forEach((coin) => console.log(`Coin ID: ${formatCoinID(coin)}`));
 
   // Store cache data (location, coins, bounds)
   const cache = {
@@ -103,13 +106,18 @@ function spawnCache(lat: number, lng: number) {
 
   // Popup Content with Deposit and Collect functionality
   const updatePopupContent = () => {
-    return `Cache located at cell (${i}, ${j})<br>Coins available: ${cache.coins.length}<br>
-            <button id="collect-button-${i}-${j}">Collect</button>`;
+    const coinIDs = cache.coins.map((coin) => formatCoinID(coin)).join(", ");
+    return `Cache located at cell (${i}, ${j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
+            <button id="collect-button-${i}-${j}">Collect</button>
+            <br><br>
+            <input type="number" id="deposit-amount-${i}-${j}" placeholder="Coins to deposit" min="1">
+            <button id="deposit-button-${i}-${j}">Deposit</button>`;
   };
   rect.bindPopup(updatePopupContent);
 
-  // Handle Collection Functionality
+  // Handle Collection and Deposit Functionality
   rect.on("popupopen", () => {
+    // Collect Button
     const collectButton = document.getElementById(`collect-button-${i}-${j}`);
     if (collectButton) {
       collectButton.addEventListener("click", () => {
@@ -121,6 +129,39 @@ function spawnCache(lat: number, lng: number) {
         } else {
           alert("No coins left in this cache.");
         }
+      });
+    }
+
+    // Deposit Button
+    const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
+    if (depositButton) {
+      depositButton.addEventListener("click", () => {
+        const depositInput = document.getElementById(
+          `deposit-amount-${i}-${j}`,
+        ) as HTMLInputElement;
+        const depositAmount = parseInt(depositInput.value, 10);
+
+        if (isNaN(depositAmount) || depositAmount <= 0) {
+          alert("Please enter a valid number of coins to deposit.");
+          return;
+        }
+
+        if (playerCoins >= depositAmount) {
+          // Deduct from player coins and add to cache
+          playerCoins -= depositAmount;
+          for (let serial = 0; serial < depositAmount; serial++) {
+            cache.coins.push({ i, j, serial: cache.coins.length });
+          }
+          alert(
+            `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
+          );
+          rect.setPopupContent(updatePopupContent()); // Refresh the popup with updated coin count
+        } else {
+          alert("You don't have enough coins to deposit that amount.");
+        }
+
+        // Clear the input after the deposit
+        depositInput.value = "";
       });
     }
   });
