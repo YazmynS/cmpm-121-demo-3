@@ -92,6 +92,9 @@ const playerMarker = leaflet.marker(OAKES_CLASSROOM);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+// Create a polyline to show the player's movement history
+const movementHistory = leaflet.polyline([], { color: "blue" }).addTo(map);
+
 // Array to store all cache layers
 const caches: {
   layer: leaflet.Rectangle;
@@ -108,6 +111,10 @@ function movePlayer(dLat: number, dLng: number) {
   );
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
+
+  // Add the new position to the movement history polyline
+  movementHistory.addLatLng(playerPosition);
+
   updateCacheLayers(); // Update cache visibility based on new position
 }
 
@@ -158,6 +165,10 @@ geolocationButton.onclick = () => {
         playerPosition = leaflet.latLng(latitude, longitude);
         playerMarker.setLatLng(playerPosition);
         map.setView(playerPosition);
+
+        // Update the movement history polyline with new geolocation
+        movementHistory.addLatLng(playerPosition);
+
         updateCacheLayers(); // Update cache visibility based on new position
       },
       (error) => {
