@@ -8,14 +8,14 @@ import luck from "./luck.ts";
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 
 // gameplay parameters
-const TILE_DEGREES = 1e-4;
+const TILE_DEGREES = 1e-4; // 0.0001 degrees, cell size for movement and cache placement
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 let playerCoins = 0;
 let playerPosition = OAKES_CLASSROOM; // Track player position
 
 // Define radius within which caches should be visible (in degrees)
-const playerRadius = .0003; // Adjust this radius as needed
+const playerRadius = 0.0003; // Adjust this radius as needed
 
 // Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
@@ -89,7 +89,7 @@ function movePlayer(dLat: number, dLng: number) {
 const controlsDiv = document.createElement("div");
 controlsDiv.id = "controlsDiv"; // Assign ID for CSS styling
 
-// Define and add buttons
+// Define and add buttons, using TILE_DEGREES to ensure consistent cell-granularity movement
 const buttonUp = document.createElement("button");
 buttonUp.innerText = "⬆️";
 buttonUp.className = "control-button"; // Apply shared button styling
@@ -230,6 +230,6 @@ function generateCacheLocations() {
   }
 }
 
-// Generate caches around the player's location
+// Generate caches around the player's initial location
 generateCacheLocations();
-updateCacheLayers(); // Initialize cache visibility based on initial position
+updateCacheLayers(); // Initialize cache visibility based on the initial position
