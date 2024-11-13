@@ -32,11 +32,9 @@ function latLngToGridCoords(
 function getOrCreateCell(lat: number, lng: number) {
   const key = `${lat},${lng}`;
   if (cellCache.has(key)) {
-    console.log(`Reusing existing cell for key: ${key}`);
     return cellCache.get(key)!;
   } else {
     const cell = latLngToGridCoords(lat, lng);
-    console.log(`Creating new cell for key: ${key}`);
     cellCache.set(key, cell);
     return cell;
   }
@@ -113,11 +111,6 @@ function movePlayer(dLat: number, dLng: number) {
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
 
-  // Log the player's current position to confirm movement in TILE_DEGREES increments
-  console.log(
-    `Player moved to lat: ${playerPosition.lat}, lng: ${playerPosition.lng}`,
-  );
-
   updateCacheLayers(); // Update cache visibility based on new position
 }
 
@@ -174,9 +167,6 @@ function updateCacheLayers() {
 // Create and Display Caches at a location
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
-  console.log(
-    `Cache at lat: ${lat}, lng: ${lng} -> Grid cell: {i: ${i}, j: ${j}}`,
-  );
 
   const bounds = leaflet.latLngBounds([
     [lat, lng],
@@ -188,7 +178,6 @@ function spawnCache(lat: number, lng: number) {
   const savedState = getCacheState(i, j);
   if (savedState) {
     coins = savedState.coins;
-    console.log(`Restoring state for cache at {i: ${i}, j: ${j}}`);
   } else {
     const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
       1;
