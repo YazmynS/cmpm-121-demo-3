@@ -47,6 +47,31 @@ function formatCoinID(coin: { i: number; j: number; serial: number }): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
 
+// Memento pattern for cache state
+class CacheMemento {
+  constructor(
+    public i: number,
+    public j: number,
+    public coins: { i: number; j: number; serial: number }[],
+  ) {}
+}
+
+const cacheMementos = new Map<string, CacheMemento>();
+
+function saveCacheState(
+  i: number,
+  j: number,
+  coins: { i: number; j: number; serial: number }[],
+) {
+  const key = `${i}:${j}`;
+  cacheMementos.set(key, new CacheMemento(i, j, [...coins]));
+}
+
+function getCacheState(i: number, j: number): CacheMemento | undefined {
+  const key = `${i}:${j}`;
+  return cacheMementos.get(key);
+}
+
 // Create Map
 const map = leaflet.map(document.getElementById("map")!, {
   center: OAKES_CLASSROOM,
@@ -72,7 +97,12 @@ playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
 // Array to store all cache layers
-const caches: { layer: leaflet.Rectangle; bounds: leaflet.LatLngBounds }[] = [];
+const caches: {
+  layer: leaflet.Rectangle;
+  bounds: leaflet.LatLngBounds;
+  i: number;
+  j: number;
+}[] = [];
 
 // Function to update player position and marker
 function movePlayer(dLat: number, dLng: number) {
@@ -82,6 +112,12 @@ function movePlayer(dLat: number, dLng: number) {
   );
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
+
+  // Log the player's current position to confirm movement in TILE_DEGREES increments
+  console.log(
+    `Player moved to lat: ${playerPosition.lat}, lng: ${playerPosition.lng}`,
+  );
+
   updateCacheLayers(); // Update cache visibility based on new position
 }
 
@@ -147,17 +183,22 @@ function spawnCache(lat: number, lng: number) {
     [lat + TILE_DEGREES, lng + TILE_DEGREES],
   ]);
 
-  const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
-    1;
-  const coins = Array.from(
-    { length: numCoins },
-    (_, serial) => ({ i, j, serial }),
-  );
-  coins.forEach((coin) => console.log(`Coin ID: ${formatCoinID(coin)}`));
+  // Check if there is a saved state for this cache
+  let coins = [];
+  const savedState = getCacheState(i, j);
+  if (savedState) {
+    coins = savedState.coins;
+    console.log(`Restoring state for cache at {i: ${i}, j: ${j}}`);
+  } else {
+    const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
+      1;
+    coins = Array.from({ length: numCoins }, (_, serial) => ({ i, j, serial }));
+    saveCacheState(i, j, coins); // Save initial state
+  }
 
   const cache = { i, j, coins, bounds };
   const rect = leaflet.rectangle(bounds);
-  caches.push({ layer: rect, bounds }); // Store cache for visibility control
+  caches.push({ layer: rect, bounds, i, j }); // Store cache for visibility control
   rect.addTo(map); // Initially add to map
 
   // Popup Content
@@ -172,48 +213,50 @@ function spawnCache(lat: number, lng: number) {
   rect.bindPopup(updatePopupContent);
 
   rect.on("popupopen", () => {
+    // Collect Button
     const collectButton = document.getElementById(`collect-button-${i}-${j}`);
-    if (collectButton) {
-      collectButton.addEventListener("click", () => {
-        if (cache.coins.length > 0) {
-          playerCoins += cache.coins.length;
-          cache.coins = [];
-          alert(`Collected! You now have ${playerCoins} coins.`);
-          rect.setPopupContent(updatePopupContent());
-        } else {
-          alert("No coins left in this cache.");
-        }
-      });
-    }
+    collectButton?.addEventListener("click", () => {
+      if (cache.coins.length > 0) {
+        playerCoins += cache.coins.length;
+        cache.coins = [];
+        alert(`Collected! You now have ${playerCoins} coins.`);
+        rect.setPopupContent(updatePopupContent());
+        saveCacheState(i, j, cache.coins); // Update Memento state
+      } else {
+        alert("No coins left in this cache.");
+      }
+    });
 
+    // Deposit Button
     const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
-    if (depositButton) {
-      depositButton.addEventListener("click", () => {
-        const depositInput = document.getElementById(
-          `deposit-amount-${i}-${j}`,
-        ) as HTMLInputElement;
-        const depositAmount = parseInt(depositInput.value, 10);
+    depositButton?.addEventListener("click", () => {
+      const depositInput = document.getElementById(
+        `deposit-amount-${i}-${j}`,
+      ) as HTMLInputElement;
+      const depositAmount = parseInt(depositInput.value, 10);
 
-        if (isNaN(depositAmount) || depositAmount <= 0) {
-          alert("Please enter a valid number of coins to deposit.");
-          return;
-        }
+      if (isNaN(depositAmount) || depositAmount <= 0) {
+        alert("Please enter a valid number of coins to deposit.");
+        return;
+      }
 
-        if (playerCoins >= depositAmount) {
-          playerCoins -= depositAmount;
-          for (let serial = 0; serial < depositAmount; serial++) {
-            cache.coins.push({ i, j, serial: cache.coins.length });
-          }
-          alert(
-            `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
-          );
-          rect.setPopupContent(updatePopupContent());
-        } else {
-          alert("You don't have enough coins to deposit that amount.");
+      if (playerCoins >= depositAmount) {
+        playerCoins -= depositAmount;
+        for (let serial = 0; serial < depositAmount; serial++) {
+          cache.coins.push({ i, j, serial: cache.coins.length });
         }
-        depositInput.value = "";
-      });
-    }
+        alert(
+          `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
+        );
+        rect.setPopupContent(updatePopupContent());
+        saveCacheState(i, j, cache.coins); // Update Memento state after deposit
+      } else {
+        alert("You don't have enough coins to deposit that amount.");
+      }
+
+      // Clear the input after deposit
+      depositInput.value = "";
+    });
   });
 }
 
@@ -230,6 +273,6 @@ function generateCacheLocations() {
   }
 }
 
-// Generate caches around the player's initial location
+// Generate caches around the player's location and initialize visibility
 generateCacheLocations();
 updateCacheLayers(); // Initialize cache visibility based on the initial position
