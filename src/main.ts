@@ -189,6 +189,27 @@ function updateCacheLayers() {
   });
 }
 
+// Update popup content to add clickable coin identifiers
+function updatePopupContent(
+  cache: {
+    i: number;
+    j: number;
+    coins: { i: number; j: number; serial: number }[];
+  },
+) {
+  const coinIDs = cache.coins
+    .map((coin) =>
+      `<span class="coin-id" data-i="${coin.i}" data-j="${coin.j}" data-serial="${coin.serial}">${
+        formatCoinID(coin)
+      }</span>`
+    )
+    .join(", ");
+  return `Cache located at cell (${cache.i}, ${cache.j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
+          <button id="collect-button-${cache.i}-${cache.j}">Collect</button><br>
+          <input type="number" id="deposit-amount-${cache.i}-${cache.j}" placeholder="Coins to deposit" min="1">
+          <button id="deposit-button-${cache.i}-${cache.j}">Deposit</button>`;
+}
+
 // Create and Display Caches at a location
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
@@ -214,31 +235,33 @@ function spawnCache(lat: number, lng: number) {
   caches.push({ layer: rect, bounds, i, j });
   rect.addTo(map);
 
-  const updatePopupContent = () => {
-    const coinIDs = cache.coins.map((coin) => formatCoinID(coin)).join(", ");
-    return `Cache located at cell (${i}, ${j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
-            <button id="collect-button-${i}-${j}">Collect</button><br>
-            <input type="number" id="deposit-amount-${i}-${j}" placeholder="Coins to deposit" min="1">
-            <button id="deposit-button-${i}-${j}">Deposit</button>`;
-  };
-  rect.bindPopup(updatePopupContent);
+  rect.bindPopup(updatePopupContent(cache));
 
   rect.on("popupopen", () => {
-    // Collect Button
+    document.querySelectorAll(".coin-id").forEach((element) => {
+      element.addEventListener("click", () => {
+        const coinI = parseInt(element.getAttribute("data-i")!);
+        const coinJ = parseInt(element.getAttribute("data-j")!);
+        map.setView(
+          leaflet.latLng(coinI / 10000, coinJ / 10000),
+          map.getZoom(),
+        );
+      });
+    });
+
     const collectButton = document.getElementById(`collect-button-${i}-${j}`);
     collectButton?.addEventListener("click", () => {
       if (cache.coins.length > 0) {
         playerCoins += cache.coins.length;
         cache.coins = [];
         alert(`Collected! You now have ${playerCoins} coins.`);
-        rect.setPopupContent(updatePopupContent());
+        rect.setPopupContent(updatePopupContent(cache));
         saveCacheState(i, j, cache.coins);
       } else {
         alert("No coins left in this cache.");
       }
     });
 
-    // Deposit Button
     const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
     depositButton?.addEventListener("click", () => {
       const depositInput = document.getElementById(
@@ -259,7 +282,7 @@ function spawnCache(lat: number, lng: number) {
         alert(
           `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
         );
-        rect.setPopupContent(updatePopupContent());
+        rect.setPopupContent(updatePopupContent(cache));
         saveCacheState(i, j, cache.coins); // Save updated state
       } else {
         alert("You don't have enough coins to deposit that amount.");
