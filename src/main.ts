@@ -8,14 +8,12 @@ import luck from "./luck.ts";
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 
 // gameplay parameters
-const TILE_DEGREES = 1e-4; // 0.0001 degrees, cell size for movement and cache placement
+const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 let playerCoins = 0;
-let playerPosition = OAKES_CLASSROOM; // Track player position
-
-// Define radius within which caches should be visible (in degrees)
-const playerRadius = 0.0003; // Adjust this radius as needed
+let playerPosition = OAKES_CLASSROOM;
+const playerRadius = 0.0003;
 
 // Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
@@ -110,7 +108,6 @@ function movePlayer(dLat: number, dLng: number) {
   );
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
-
   updateCacheLayers(); // Update cache visibility based on new position
 }
 
@@ -147,6 +144,34 @@ controlsDiv.appendChild(buttonDown);
 
 document.body.appendChild(controlsDiv);
 
+// Add 🌐 button
+const geolocationButton = document.createElement("button");
+geolocationButton.innerText = "🌐"; // Geolocation symbol
+geolocationButton.className = "control-button geolocation-button";
+geolocationButton.title = "Enable Geolocation";
+
+geolocationButton.onclick = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        playerPosition = leaflet.latLng(latitude, longitude);
+        playerMarker.setLatLng(playerPosition);
+        map.setView(playerPosition);
+        updateCacheLayers(); // Update cache visibility based on new position
+      },
+      (error) => {
+        alert("Geolocation error: " + error.message);
+      },
+    );
+  } else {
+    alert("Geolocation is not supported by your browser.");
+  }
+};
+
+// Add the geolocation button to the controls container
+controlsDiv.appendChild(geolocationButton);
+
 // Function to manage cache visibility based on player position
 function updateCacheLayers() {
   caches.forEach((cache) => {
@@ -167,7 +192,6 @@ function updateCacheLayers() {
 // Create and Display Caches at a location
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
-
   const bounds = leaflet.latLngBounds([
     [lat, lng],
     [lat + TILE_DEGREES, lng + TILE_DEGREES],
@@ -187,15 +211,13 @@ function spawnCache(lat: number, lng: number) {
 
   const cache = { i, j, coins, bounds };
   const rect = leaflet.rectangle(bounds);
-  caches.push({ layer: rect, bounds, i, j }); // Store cache for visibility control
-  rect.addTo(map); // Initially add to map
+  caches.push({ layer: rect, bounds, i, j });
+  rect.addTo(map);
 
-  // Popup Content
   const updatePopupContent = () => {
     const coinIDs = cache.coins.map((coin) => formatCoinID(coin)).join(", ");
     return `Cache located at cell (${i}, ${j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
-            <button id="collect-button-${i}-${j}">Collect</button>
-            <br><br>
+            <button id="collect-button-${i}-${j}">Collect</button><br>
             <input type="number" id="deposit-amount-${i}-${j}" placeholder="Coins to deposit" min="1">
             <button id="deposit-button-${i}-${j}">Deposit</button>`;
   };
@@ -210,7 +232,7 @@ function spawnCache(lat: number, lng: number) {
         cache.coins = [];
         alert(`Collected! You now have ${playerCoins} coins.`);
         rect.setPopupContent(updatePopupContent());
-        saveCacheState(i, j, cache.coins); // Update Memento state
+        saveCacheState(i, j, cache.coins);
       } else {
         alert("No coins left in this cache.");
       }
@@ -238,12 +260,10 @@ function spawnCache(lat: number, lng: number) {
           `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
         );
         rect.setPopupContent(updatePopupContent());
-        saveCacheState(i, j, cache.coins); // Update Memento state after deposit
+        saveCacheState(i, j, cache.coins); // Save updated state
       } else {
         alert("You don't have enough coins to deposit that amount.");
       }
-
-      // Clear the input after deposit
       depositInput.value = "";
     });
   });
