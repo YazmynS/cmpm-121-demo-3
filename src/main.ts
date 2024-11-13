@@ -14,6 +14,9 @@ const CACHE_SPAWN_PROBABILITY = 0.1;
 let playerCoins = 0;
 let playerPosition = OAKES_CLASSROOM; // Track player position
 
+// Define radius within which caches should be visible (in degrees)
+const playerRadius = .0003; // Adjust this radius as needed
+
 // Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
 
@@ -68,6 +71,9 @@ const playerMarker = leaflet.marker(OAKES_CLASSROOM);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+// Array to store all cache layers
+const caches: { layer: leaflet.Rectangle; bounds: leaflet.LatLngBounds }[] = [];
+
 // Function to update player position and marker
 function movePlayer(dLat: number, dLng: number) {
   playerPosition = leaflet.latLng(
@@ -76,6 +82,7 @@ function movePlayer(dLat: number, dLng: number) {
   );
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
+  updateCacheLayers(); // Update cache visibility based on new position
 }
 
 // Create movement buttons dynamically
@@ -111,6 +118,23 @@ controlsDiv.appendChild(buttonDown);
 
 document.body.appendChild(controlsDiv);
 
+// Function to manage cache visibility based on player position
+function updateCacheLayers() {
+  caches.forEach((cache) => {
+    const distance = playerPosition.distanceTo(cache.bounds.getCenter()); // Distance in meters
+
+    if (distance <= playerRadius * 111000) { // Convert degrees to meters
+      if (!map.hasLayer(cache.layer)) {
+        map.addLayer(cache.layer); // Add to map if in range
+      }
+    } else {
+      if (map.hasLayer(cache.layer)) {
+        map.removeLayer(cache.layer); // Remove from map if out of range
+      }
+    }
+  });
+}
+
 // Create and Display Caches at a location
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
@@ -133,7 +157,8 @@ function spawnCache(lat: number, lng: number) {
 
   const cache = { i, j, coins, bounds };
   const rect = leaflet.rectangle(bounds);
-  rect.addTo(map);
+  caches.push({ layer: rect, bounds }); // Store cache for visibility control
+  rect.addTo(map); // Initially add to map
 
   // Popup Content
   const updatePopupContent = () => {
@@ -207,3 +232,4 @@ function generateCacheLocations() {
 
 // Generate caches around the player's location
 generateCacheLocations();
+updateCacheLayers(); // Initialize cache visibility based on initial position
