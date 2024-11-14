@@ -4,20 +4,17 @@ import "./style.css";
 import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
-// classroom location
+// Define constants for gameplay parameters and starting location
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
-
-// gameplay parameters
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
+const PLAYER_RADIUS = 0.0003;
 let playerCoins = 0;
 let playerPosition = OAKES_CLASSROOM;
-const playerRadius = 0.0003;
 
-// Flyweight Implementation
+// Flyweight Implementation for Cell Caching
 const cellCache = new Map<string, { i: number; j: number }>();
-
 function latLngToGridCoords(
   lat: number,
   lng: number,
@@ -26,24 +23,19 @@ function latLngToGridCoords(
   const j = Math.floor(lng * 10000);
   return { i, j };
 }
-
 function getOrCreateCell(lat: number, lng: number) {
   const key = `${lat},${lng}`;
-  if (cellCache.has(key)) {
-    return cellCache.get(key)!;
-  } else {
+  if (!cellCache.has(key)) {
     const cell = latLngToGridCoords(lat, lng);
     cellCache.set(key, cell);
-    return cell;
   }
+  return cellCache.get(key)!;
 }
 
-// Coin Serialization
+// Coin Serialization and Cache State Management
 function formatCoinID(coin: { i: number; j: number; serial: number }): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
-
-// Memento pattern for cache state
 class CacheMemento {
   constructor(
     public i: number,
@@ -51,9 +43,7 @@ class CacheMemento {
     public coins: { i: number; j: number; serial: number }[],
   ) {}
 }
-
 const cacheMementos = new Map<string, CacheMemento>();
-
 function saveCacheState(
   i: number,
   j: number,
@@ -62,13 +52,11 @@ function saveCacheState(
   const key = `${i}:${j}`;
   cacheMementos.set(key, new CacheMemento(i, j, [...coins]));
 }
-
 function getCacheState(i: number, j: number): CacheMemento | undefined {
-  const key = `${i}:${j}`;
-  return cacheMementos.get(key);
+  return cacheMementos.get(`${i}:${j}`);
 }
 
-// Create Map
+// Initialize Map and UI
 const map = leaflet.map(document.getElementById("map")!, {
   center: OAKES_CLASSROOM,
   zoom: 19,
@@ -77,33 +65,49 @@ const map = leaflet.map(document.getElementById("map")!, {
   zoomControl: false,
   scrollWheelZoom: false,
 });
+leaflet.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution:
+    '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+}).addTo(map);
 
-// Add Map Image
-leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  })
-  .addTo(map);
-
-// Add Player Marker
-const playerMarker = leaflet.marker(OAKES_CLASSROOM);
-playerMarker.bindTooltip("That's you!");
+const playerMarker = leaflet.marker(OAKES_CLASSROOM).bindTooltip("That's you!");
 playerMarker.addTo(map);
-
-// Create a polyline to show the player's movement history
 const movementHistory = leaflet.polyline([], { color: "blue" }).addTo(map);
 
-// Array to store all cache layers
-const caches: {
-  layer: leaflet.Rectangle;
-  bounds: leaflet.LatLngBounds;
-  i: number;
-  j: number;
-}[] = [];
+// Create UI controls for movement and geolocation
+function setupControls() {
+  const controlsDiv = document.createElement("div");
+  controlsDiv.id = "controlsDiv";
 
-// Function to update player position and marker
+  const buttonUp = createButton("⬆️", () => movePlayer(TILE_DEGREES, 0));
+  const buttonDown = createButton("⬇️", () => movePlayer(-TILE_DEGREES, 0));
+  const buttonLeft = createButton("⬅️", () => movePlayer(0, -TILE_DEGREES));
+  const buttonRight = createButton("➡️", () => movePlayer(0, TILE_DEGREES));
+  const geolocationButton = createButton("🌐", enableGeolocation);
+  const resetButton = createButton("🚮", resetGameState);
+  resetButton.title = "Reset Game State"; // Tooltip text
+
+  [
+    buttonUp,
+    buttonLeft,
+    buttonRight,
+    buttonDown,
+    geolocationButton,
+    resetButton,
+  ].forEach((btn) => controlsDiv.appendChild(btn));
+  document.body.appendChild(controlsDiv);
+}
+
+function createButton(label: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.innerText = label;
+  button.className = "control-button";
+  button.onclick = onClick;
+  return button;
+}
+
+// Move Player and Update Position
 function movePlayer(dLat: number, dLng: number) {
   playerPosition = leaflet.latLng(
     playerPosition.lat + dLat,
@@ -111,84 +115,180 @@ function movePlayer(dLat: number, dLng: number) {
   );
   playerMarker.setLatLng(playerPosition);
   map.setView(playerPosition);
-
-  // Add the new position to the movement history polyline
   movementHistory.addLatLng(playerPosition);
-
-  updateCacheLayers(); // Update cache visibility based on new position
+  updateCacheLayers();
 }
 
-// Create movement buttons dynamically
-const controlsDiv = document.createElement("div");
-controlsDiv.id = "controlsDiv"; // Assign ID for CSS styling
-
-// Define and add buttons, using TILE_DEGREES to ensure consistent cell-granularity movement
-const buttonUp = document.createElement("button");
-buttonUp.innerText = "⬆️";
-buttonUp.className = "control-button"; // Apply shared button styling
-buttonUp.onclick = () => movePlayer(TILE_DEGREES, 0);
-
-const buttonDown = document.createElement("button");
-buttonDown.innerText = "⬇️";
-buttonDown.className = "control-button";
-buttonDown.onclick = () => movePlayer(-TILE_DEGREES, 0);
-
-const buttonLeft = document.createElement("button");
-buttonLeft.innerText = "⬅️";
-buttonLeft.className = "control-button";
-buttonLeft.onclick = () => movePlayer(0, -TILE_DEGREES);
-
-const buttonRight = document.createElement("button");
-buttonRight.innerText = "➡️";
-buttonRight.className = "control-button";
-buttonRight.onclick = () => movePlayer(0, TILE_DEGREES);
-
-// Arrange and append buttons
-controlsDiv.appendChild(buttonUp);
-controlsDiv.appendChild(buttonLeft);
-controlsDiv.appendChild(buttonRight);
-controlsDiv.appendChild(buttonDown);
-
-document.body.appendChild(controlsDiv);
-
-// Add 🌐 button
-const geolocationButton = document.createElement("button");
-geolocationButton.innerText = "🌐"; // Geolocation symbol
-geolocationButton.className = "control-button geolocation-button";
-geolocationButton.title = "Enable Geolocation";
-
-geolocationButton.onclick = () => {
+// Enable Geolocation for Player
+function enableGeolocation() {
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        playerPosition = leaflet.latLng(latitude, longitude);
+        playerPosition = leaflet.latLng(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
         playerMarker.setLatLng(playerPosition);
         map.setView(playerPosition);
-
-        // Update the movement history polyline with new geolocation
         movementHistory.addLatLng(playerPosition);
-
-        updateCacheLayers(); // Update cache visibility based on new position
+        updateCacheLayers();
       },
-      (error) => {
-        alert("Geolocation error: " + error.message);
-      },
+      (error) => alert("Geolocation error: " + error.message),
     );
   } else {
     alert("Geolocation is not supported by your browser.");
   }
-};
+}
 
-// Add the geolocation button to the controls container
-controlsDiv.appendChild(geolocationButton);
+// Reset game state function
+function resetGameState() {
+  const confirmation = prompt(
+    "Are you sure you want to reset the game state? Type 'yes' to confirm.",
+  );
+  if (confirmation === "yes") {
+    // Reset player coins
+    playerCoins = 0;
+    alert(
+      "Game state has been reset. All coins have been returned to their original caches.",
+    );
 
-// Function to manage cache visibility based on player position
+    // Restore each cache to its initial saved state
+    caches.forEach((cache) => {
+      const savedState = getCacheState(cache.i, cache.j);
+      if (savedState) {
+        cache.coins = [...savedState.coins]; // Restore original coins
+      }
+      cache.layer.setPopupContent(createPopupContent(cache)); // Update the popup content to reflect reset
+    });
+
+    // Clear the movement history polyline
+    movementHistory.setLatLngs([]);
+  }
+}
+
+// Cache Management and Rendering
+const caches: {
+  layer: leaflet.Rectangle;
+  bounds: leaflet.LatLngBounds;
+  i: number;
+  j: number;
+  coins: { i: number; j: number; serial: number }[];
+}[] = [];
+function spawnCache(lat: number, lng: number) {
+  const { i, j } = getOrCreateCell(lat, lng);
+  const bounds = leaflet.latLngBounds([
+    [lat, lng],
+    [lat + TILE_DEGREES, lng + TILE_DEGREES],
+  ]);
+
+  // Get coins either from saved state or create a new array of coins
+  const savedState = getCacheState(i, j);
+  const coins = savedState?.coins || Array.from(
+    { length: Math.floor(luck([i, j, "initialValue"].toString()) * 100) + 1 },
+    (_, serial) => ({ i, j, serial }),
+  );
+
+  // Save initial state if new coins were created
+  if (!savedState) {
+    saveCacheState(i, j, coins);
+  }
+
+  // Create the cache object with the `coins` property
+  const cache = { layer: leaflet.rectangle(bounds), bounds, i, j, coins };
+
+  // Add cache layer to the map and bind the popup content
+  cache.layer.addTo(map).bindPopup(createPopupContent(cache));
+  cache.layer.on("popupopen", () => setupPopupActions(cache, cache.layer));
+
+  // Add the cache object to `caches` array
+  caches.push(cache);
+}
+
+function createPopupContent(
+  cache: {
+    i: number;
+    j: number;
+    coins: { i: number; j: number; serial: number }[];
+  },
+) {
+  const coinIDs = cache.coins.map((coin) =>
+    `<span class="coin-id" data-i="${coin.i}" data-j="${coin.j}" data-serial="${coin.serial}">${
+      formatCoinID(coin)
+    }</span>`
+  ).join(", ");
+  return `Cache located at cell (${cache.i}, ${cache.j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
+          <button id="collect-button-${cache.i}-${cache.j}">Collect</button><br>
+          <input type="number" id="deposit-amount-${cache.i}-${cache.j}" placeholder="Coins to deposit" min="1">
+          <button id="deposit-button-${cache.i}-${cache.j}">Deposit</button>`;
+}
+
+function setupPopupActions(
+  cache: {
+    i: number;
+    j: number;
+    coins: { i: number; j: number; serial: number }[];
+  },
+  rect: leaflet.Rectangle,
+) {
+  document.querySelectorAll(".coin-id").forEach((element) => {
+    element.addEventListener(
+      "click",
+      () =>
+        map.setView(
+          leaflet.latLng(
+            parseInt(element.getAttribute("data-i")!) / 10000,
+            parseInt(element.getAttribute("data-j")!) / 10000,
+          ),
+          map.getZoom(),
+        ),
+    );
+  });
+
+  document.getElementById(`collect-button-${cache.i}-${cache.j}`)
+    ?.addEventListener("click", () => {
+      if (cache.coins.length) {
+        playerCoins += cache.coins.length;
+        cache.coins = [];
+        rect.setPopupContent(createPopupContent(cache));
+        saveCacheState(cache.i, cache.j, cache.coins);
+        alert(`Collected! You now have ${playerCoins} coins.`);
+      } else alert("No coins left in this cache.");
+    });
+
+  document.getElementById(`deposit-button-${cache.i}-${cache.j}`)
+    ?.addEventListener("click", () => {
+      const depositInput = document.getElementById(
+        `deposit-amount-${cache.i}-${cache.j}`,
+      ) as HTMLInputElement;
+      const depositAmount = parseInt(depositInput.value, 10);
+      if (isNaN(depositAmount) || depositAmount <= 0) {
+        alert("Please enter a valid number of coins to deposit.");
+        return;
+      }
+      if (playerCoins >= depositAmount) {
+        playerCoins -= depositAmount;
+        for (let serial = 0; serial < depositAmount; serial++) {
+          cache.coins.push({
+            i: cache.i,
+            j: cache.j,
+            serial: cache.coins.length,
+          });
+        }
+        rect.setPopupContent(createPopupContent(cache));
+        saveCacheState(cache.i, cache.j, cache.coins);
+        alert(
+          `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
+        );
+      } else alert("You don't have enough coins to deposit that amount.");
+      depositInput.value = "";
+    });
+}
+
+// Update Cache Visibility Based on Player Position
 function updateCacheLayers() {
   caches.forEach((cache) => {
-    const distance = playerPosition.distanceTo(cache.bounds.getCenter()); // Distance in meters
-
-    if (distance <= playerRadius * 111000) { // Convert degrees to meters
+    const distance = playerPosition.distanceTo(cache.bounds.getCenter());
+    if (distance <= PLAYER_RADIUS * 111000) { // Convert degrees to meters
       if (!map.hasLayer(cache.layer)) {
         map.addLayer(cache.layer); // Add to map if in range
       }
@@ -200,110 +300,7 @@ function updateCacheLayers() {
   });
 }
 
-// Update popup content to add clickable coin identifiers
-function updatePopupContent(
-  cache: {
-    i: number;
-    j: number;
-    coins: { i: number; j: number; serial: number }[];
-  },
-) {
-  const coinIDs = cache.coins
-    .map((coin) =>
-      `<span class="coin-id" data-i="${coin.i}" data-j="${coin.j}" data-serial="${coin.serial}">${
-        formatCoinID(coin)
-      }</span>`
-    )
-    .join(", ");
-  return `Cache located at cell (${cache.i}, ${cache.j})<br>Coins available: ${cache.coins.length}<br>Coin IDs: ${coinIDs}<br>
-          <button id="collect-button-${cache.i}-${cache.j}">Collect</button><br>
-          <input type="number" id="deposit-amount-${cache.i}-${cache.j}" placeholder="Coins to deposit" min="1">
-          <button id="deposit-button-${cache.i}-${cache.j}">Deposit</button>`;
-}
-
-// Create and Display Caches at a location
-function spawnCache(lat: number, lng: number) {
-  const { i, j } = getOrCreateCell(lat, lng);
-  const bounds = leaflet.latLngBounds([
-    [lat, lng],
-    [lat + TILE_DEGREES, lng + TILE_DEGREES],
-  ]);
-
-  // Check if there is a saved state for this cache
-  let coins = [];
-  const savedState = getCacheState(i, j);
-  if (savedState) {
-    coins = savedState.coins;
-  } else {
-    const numCoins = Math.floor(luck([i, j, "initialValue"].toString()) * 100) +
-      1;
-    coins = Array.from({ length: numCoins }, (_, serial) => ({ i, j, serial }));
-    saveCacheState(i, j, coins); // Save initial state
-  }
-
-  const cache = { i, j, coins, bounds };
-  const rect = leaflet.rectangle(bounds);
-  caches.push({ layer: rect, bounds, i, j });
-  rect.addTo(map);
-
-  rect.bindPopup(updatePopupContent(cache));
-
-  rect.on("popupopen", () => {
-    document.querySelectorAll(".coin-id").forEach((element) => {
-      element.addEventListener("click", () => {
-        const coinI = parseInt(element.getAttribute("data-i")!);
-        const coinJ = parseInt(element.getAttribute("data-j")!);
-        map.setView(
-          leaflet.latLng(coinI / 10000, coinJ / 10000),
-          map.getZoom(),
-        );
-      });
-    });
-
-    const collectButton = document.getElementById(`collect-button-${i}-${j}`);
-    collectButton?.addEventListener("click", () => {
-      if (cache.coins.length > 0) {
-        playerCoins += cache.coins.length;
-        cache.coins = [];
-        alert(`Collected! You now have ${playerCoins} coins.`);
-        rect.setPopupContent(updatePopupContent(cache));
-        saveCacheState(i, j, cache.coins);
-      } else {
-        alert("No coins left in this cache.");
-      }
-    });
-
-    const depositButton = document.getElementById(`deposit-button-${i}-${j}`);
-    depositButton?.addEventListener("click", () => {
-      const depositInput = document.getElementById(
-        `deposit-amount-${i}-${j}`,
-      ) as HTMLInputElement;
-      const depositAmount = parseInt(depositInput.value, 10);
-
-      if (isNaN(depositAmount) || depositAmount <= 0) {
-        alert("Please enter a valid number of coins to deposit.");
-        return;
-      }
-
-      if (playerCoins >= depositAmount) {
-        playerCoins -= depositAmount;
-        for (let serial = 0; serial < depositAmount; serial++) {
-          cache.coins.push({ i, j, serial: cache.coins.length });
-        }
-        alert(
-          `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
-        );
-        rect.setPopupContent(updatePopupContent(cache));
-        saveCacheState(i, j, cache.coins); // Save updated state
-      } else {
-        alert("You don't have enough coins to deposit that amount.");
-      }
-      depositInput.value = "";
-    });
-  });
-}
-
-// Create Potential Cache Locations
+// Generate Cache Locations Around the Player
 function generateCacheLocations() {
   for (let i = -NEIGHBORHOOD_SIZE; i <= NEIGHBORHOOD_SIZE; i++) {
     for (let j = -NEIGHBORHOOD_SIZE; j <= NEIGHBORHOOD_SIZE; j++) {
@@ -316,6 +313,12 @@ function generateCacheLocations() {
   }
 }
 
-// Generate caches around the player's location and initialize visibility
-generateCacheLocations();
-updateCacheLayers(); // Initialize cache visibility based on the initial position
+// Initialize the Game
+function initializeGame() {
+  generateCacheLocations();
+  updateCacheLayers();
+  setupControls();
+}
+
+// Start the Game
+initializeGame();
