@@ -170,12 +170,12 @@ function enableGeolocation() {
 // Reset game state function
 function resetGameState() {
   const confirmation = prompt(
-    "Are you sure you want to reset the game state? Type 'yes' to confirm.",
+    "Type 'yes' reset the game state.",
   );
   if (confirmation === "yes") {
     playerCoins = 0;
     alert(
-      "Game state has been reset. All coins have been returned to their original caches.",
+      "Game state has been reset.",
     );
 
     caches.forEach((cache) => {
