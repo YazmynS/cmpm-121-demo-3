@@ -4,6 +4,27 @@ import "./style.css";
 import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
+// Define interfaces
+interface Coin {
+  i: number;
+  j: number;
+  serial: number;
+}
+
+interface Cache {
+  layer: leaflet.Rectangle;
+  bounds: leaflet.LatLngBounds;
+  i: number;
+  j: number;
+  coins: Coin[];
+}
+
+interface CacheMemento {
+  i: number;
+  j: number;
+  coins: Coin[];
+}
+
 // Define constants for gameplay parameters and starting location
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 const TILE_DEGREES = 1e-4;
@@ -33,24 +54,13 @@ function getOrCreateCell(lat: number, lng: number) {
 }
 
 // Coin Serialization and Cache State Management
-function formatCoinID(coin: { i: number; j: number; serial: number }): string {
+function formatCoinID(coin: Coin): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
-class CacheMemento {
-  constructor(
-    public i: number,
-    public j: number,
-    public coins: { i: number; j: number; serial: number }[],
-  ) {}
-}
 const cacheMementos = new Map<string, CacheMemento>();
-function saveCacheState(
-  i: number,
-  j: number,
-  coins: { i: number; j: number; serial: number }[],
-) {
+function saveCacheState(i: number, j: number, coins: Coin[]) {
   const key = `${i}:${j}`;
-  cacheMementos.set(key, new CacheMemento(i, j, [...coins]));
+  cacheMementos.set(key, { i, j, coins: [...coins] });
 }
 function getCacheState(i: number, j: number): CacheMemento | undefined {
   return cacheMementos.get(`${i}:${j}`);
@@ -79,6 +89,7 @@ const movementHistory = leaflet.polyline([], { color: "blue" }).addTo(map);
 function setupControls() {
   const controlsDiv = document.createElement("div");
   controlsDiv.id = "controlsDiv";
+  controlsDiv.style.display = "none"; // Hide by default
 
   const buttonUp = createButton("⬆️", () => movePlayer(TILE_DEGREES, 0));
   const buttonDown = createButton("⬇️", () => movePlayer(-TILE_DEGREES, 0));
@@ -96,7 +107,23 @@ function setupControls() {
     geolocationButton,
     resetButton,
   ].forEach((btn) => controlsDiv.appendChild(btn));
+
   document.body.appendChild(controlsDiv);
+
+  // Toggle button to show/hide directional controls
+  const toggleButton = document.createElement("button");
+  toggleButton.innerText = "Show Controls";
+  toggleButton.className = "control-button toggle-controls";
+  toggleButton.onclick = () => {
+    if (controlsDiv.style.display === "none") {
+      controlsDiv.style.display = "block";
+      toggleButton.innerText = "Hide Controls";
+    } else {
+      controlsDiv.style.display = "none";
+      toggleButton.innerText = "Show Controls";
+    }
+  };
+  document.body.appendChild(toggleButton);
 }
 
 function createButton(label: string, onClick: () => void): HTMLButtonElement {
@@ -146,71 +173,54 @@ function resetGameState() {
     "Are you sure you want to reset the game state? Type 'yes' to confirm.",
   );
   if (confirmation === "yes") {
-    // Reset player coins
     playerCoins = 0;
     alert(
       "Game state has been reset. All coins have been returned to their original caches.",
     );
 
-    // Restore each cache to its initial saved state
     caches.forEach((cache) => {
       const savedState = getCacheState(cache.i, cache.j);
       if (savedState) {
-        cache.coins = [...savedState.coins]; // Restore original coins
+        cache.coins = [...savedState.coins];
       }
-      cache.layer.setPopupContent(createPopupContent(cache)); // Update the popup content to reflect reset
+      cache.layer.setPopupContent(createPopupContent(cache));
     });
 
-    // Clear the movement history polyline
     movementHistory.setLatLngs([]);
   }
 }
 
 // Cache Management and Rendering
-const caches: {
-  layer: leaflet.Rectangle;
-  bounds: leaflet.LatLngBounds;
-  i: number;
-  j: number;
-  coins: { i: number; j: number; serial: number }[];
-}[] = [];
+const caches: Cache[] = [];
 function spawnCache(lat: number, lng: number) {
   const { i, j } = getOrCreateCell(lat, lng);
-  const bounds = leaflet.latLngBounds([
-    [lat, lng],
-    [lat + TILE_DEGREES, lng + TILE_DEGREES],
-  ]);
-
-  // Get coins either from saved state or create a new array of coins
+  const bounds = leaflet.latLngBounds([[lat, lng], [
+    lat + TILE_DEGREES,
+    lng + TILE_DEGREES,
+  ]]);
   const savedState = getCacheState(i, j);
   const coins = savedState?.coins || Array.from(
     { length: Math.floor(luck([i, j, "initialValue"].toString()) * 100) + 1 },
     (_, serial) => ({ i, j, serial }),
   );
 
-  // Save initial state if new coins were created
   if (!savedState) {
     saveCacheState(i, j, coins);
   }
 
-  // Create the cache object with the `coins` property
-  const cache = { layer: leaflet.rectangle(bounds), bounds, i, j, coins };
-
-  // Add cache layer to the map and bind the popup content
+  const cache: Cache = {
+    layer: leaflet.rectangle(bounds),
+    bounds,
+    i,
+    j,
+    coins,
+  };
   cache.layer.addTo(map).bindPopup(createPopupContent(cache));
   cache.layer.on("popupopen", () => setupPopupActions(cache, cache.layer));
-
-  // Add the cache object to `caches` array
   caches.push(cache);
 }
 
-function createPopupContent(
-  cache: {
-    i: number;
-    j: number;
-    coins: { i: number; j: number; serial: number }[];
-  },
-) {
+function createPopupContent(cache: Cache) {
   const coinIDs = cache.coins.map((coin) =>
     `<span class="coin-id" data-i="${coin.i}" data-j="${coin.j}" data-serial="${coin.serial}">${
       formatCoinID(coin)
@@ -222,14 +232,7 @@ function createPopupContent(
           <button id="deposit-button-${cache.i}-${cache.j}">Deposit</button>`;
 }
 
-function setupPopupActions(
-  cache: {
-    i: number;
-    j: number;
-    coins: { i: number; j: number; serial: number }[];
-  },
-  rect: leaflet.Rectangle,
-) {
+function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
   document.querySelectorAll(".coin-id").forEach((element) => {
     element.addEventListener(
       "click",
@@ -313,11 +316,36 @@ function generateCacheLocations() {
   }
 }
 
+// Sensor-based movement
+function enableSensorMovement() {
+  if (globalThis.DeviceOrientationEvent) {
+    globalThis.addEventListener("deviceorientation", (event) => {
+      const { beta, gamma } = event;
+      if (beta && gamma) {
+        const tiltThreshold = 10; // Threshold for movement
+        let dLat = 0;
+        let dLng = 0;
+
+        if (beta > tiltThreshold) dLat = TILE_DEGREES;
+        else if (beta < -tiltThreshold) dLat = -TILE_DEGREES;
+
+        if (gamma > tiltThreshold) dLng = TILE_DEGREES;
+        else if (gamma < -tiltThreshold) dLng = -TILE_DEGREES;
+
+        if (dLat !== 0 || dLng !== 0) movePlayer(dLat, dLng);
+      }
+    });
+  } else {
+    alert("Sensor-based movement is not supported on this device.");
+  }
+}
+
 // Initialize the Game
 function initializeGame() {
   generateCacheLocations();
   updateCacheLayers();
   setupControls();
+  enableSensorMovement(); // Enable sensor movement by default
 }
 
 // Start the Game
