@@ -1,11 +1,11 @@
-// Updated Full File
+// Import Statements
 import leaflet from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
 import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
-// Define interfaces
+// Interfaces
 interface Coin {
   i: number;
   j: number;
@@ -26,7 +26,7 @@ interface CacheMemento {
   coins: Coin[];
 }
 
-// Define constants for gameplay parameters and starting location
+// Define Varaibles
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
@@ -35,7 +35,7 @@ const PLAYER_RADIUS = 0.0003;
 let playerCoins = 0;
 let playerPosition = OAKES_CLASSROOM;
 
-// Flyweight Implementation for Cell Caching
+// Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
 function latLngToGridCoords(
   lat: number,
@@ -54,12 +54,12 @@ function getOrCreateCell(lat: number, lng: number) {
   return cellCache.get(key)!;
 }
 
-// Coin Serialization and Cache State Management
+// Coin and Cache Management
 function formatCoinID(coin: Coin): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
 const cacheMementos = new Map<string, CacheMemento>();
-const currentCacheState = new Map<string, CacheMemento>(); // For current state
+const currentCacheState = new Map<string, CacheMemento>();
 
 function saveCacheState(i: number, j: number, coins: Coin[]) {
   const key = `${i}:${j}`;
@@ -93,7 +93,7 @@ const movementHistory = leaflet.polyline([], { color: "blue" }).addTo(map);
 function setupControls() {
   const controlsDiv = document.createElement("div");
   controlsDiv.id = "controlsDiv";
-  controlsDiv.style.display = "none"; // Hide by default
+  controlsDiv.style.display = "none";
 
   const buttonUp = createButton("⬆️", () => movePlayer(TILE_DEGREES, 0));
   const buttonDown = createButton("⬇️", () => movePlayer(-TILE_DEGREES, 0));
@@ -101,7 +101,7 @@ function setupControls() {
   const buttonRight = createButton("➡️", () => movePlayer(0, TILE_DEGREES));
   const geolocationButton = createButton("🌐", enableGeolocation);
   const resetButton = createButton("🚮", resetGameState);
-  resetButton.title = "Reset Game State"; // Tooltip text
+  resetButton.title = "Reset Game State";
 
   [
     buttonUp,
@@ -172,7 +172,6 @@ function enableGeolocation() {
 }
 
 // Reset game state function
-// Reset game state function
 function resetGameState() {
   const confirmation = prompt(
     "Type 'yes' reset the game state.",
@@ -184,18 +183,18 @@ function resetGameState() {
     );
 
     caches.forEach((cache) => {
-      const originalState = cacheMementos.get(`${cache.i}:${cache.j}`); // Retrieve original state
+      const originalState = cacheMementos.get(`${cache.i}:${cache.j}`);
       if (originalState) {
-        cache.coins = [...originalState.coins]; // Reset to original coins
-        saveCacheState(cache.i, cache.j, cache.coins); // Update current state with original
+        cache.coins = [...originalState.coins];
+        saveCacheState(cache.i, cache.j, cache.coins);
       }
-      const currentState = getCacheState(cache.i, cache.j); // Access current state for logging or debug
+      const currentState = getCacheState(cache.i, cache.j);
       console.log(`Reset cache (${cache.i}, ${cache.j}):`, currentState);
 
       cache.layer.setPopupContent(createPopupContent(cache));
     });
 
-    movementHistory.setLatLngs([]); // Clear movement history
+    movementHistory.setLatLngs([]);
   }
 }
 
@@ -216,9 +215,9 @@ function spawnCache(lat: number, lng: number) {
     );
 
   if (!cacheMementos.has(key)) {
-    cacheMementos.set(key, { i, j, coins: [...coins] }); // Store original state
+    cacheMementos.set(key, { i, j, coins: [...coins] });
   }
-  saveCacheState(i, j, coins); // Save current state
+  saveCacheState(i, j, coins);
 
   const cache: Cache = {
     layer: leaflet.rectangle(bounds),
@@ -303,13 +302,13 @@ function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
 function updateCacheLayers() {
   caches.forEach((cache) => {
     const distance = playerPosition.distanceTo(cache.bounds.getCenter());
-    if (distance <= PLAYER_RADIUS * 111000) { // Convert degrees to meters
+    if (distance <= PLAYER_RADIUS * 111000) {
       if (!map.hasLayer(cache.layer)) {
-        map.addLayer(cache.layer); // Add to map if in range
+        map.addLayer(cache.layer);
       }
     } else {
       if (map.hasLayer(cache.layer)) {
-        map.removeLayer(cache.layer); // Remove from map if out of range
+        map.removeLayer(cache.layer);
       }
     }
   });
@@ -334,7 +333,7 @@ function enableSensorMovement() {
     globalThis.addEventListener("deviceorientation", (event) => {
       const { beta, gamma } = event;
       if (beta && gamma) {
-        const tiltThreshold = 10; // Threshold for movement
+        const tiltThreshold = 10;
         let dLat = 0;
         let dLng = 0;
 
@@ -357,7 +356,7 @@ function initializeGame() {
   generateCacheLocations();
   updateCacheLayers();
   setupControls();
-  enableSensorMovement(); // Enable sensor movement by default
+  enableSensorMovement();
 }
 
 // Start the Game
