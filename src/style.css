@@ -49,7 +49,7 @@ h1 {
 
 /* General button styles */
 button {
-  border: none; /* Remove border completely */
+  border: none;
   border-radius: 8px;
   padding: 0.6em 1.2em;
   font-size: 1em;
@@ -70,14 +70,14 @@ button:focus-visible {
 
 /* Styles for movement button layout */
 #controlsDiv {
-  display: flex; /* Align buttons in a single row */
+  display: flex; 
   flex-direction: row;
   align-items: center;
   position: absolute;
   bottom: 20px;
   left: 20px;
   z-index: 1000;
-  gap: 10px; /* Space between buttons */
+  gap: 10px; 
 }
 
 /* Individual control button styling */
@@ -86,13 +86,13 @@ button:focus-visible {
   height: 50px;
   font-size: 1.5em;
   color: white;
-  background-color: transparent; /* Ensure transparent background */
-  border: none; /* Remove border */
+  background-color: transparent; 
+  border: none; 
   cursor: pointer;
 }
 
 .control-button:hover {
-  border-color: transparent; /* Ensure no border on hover */
+  border-color: transparent; 
 }
 
 /* Additional styles for the geolocation button */
@@ -101,13 +101,13 @@ button:focus-visible {
   color: #ffffff;
   width: 50px;
   height: 50px;
-  background-color: transparent; /* Ensure transparent background */
-  border: none; /* Remove border */
-  border-radius: 50%; /* Circular button */
+  background-color: transparent; 
+  border: none; 
+  border-radius: 50%; 
   cursor: pointer;
   transition: border-color 0.25s;
 }
 
 .geolocation-button:hover {
-  border-color: transparent; /* Ensure no border on hover */
+  border-color: transparent; 
 }
