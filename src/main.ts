@@ -1,3 +1,4 @@
+// Updated Full File
 import leaflet from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
@@ -58,12 +59,15 @@ function formatCoinID(coin: Coin): string {
   return `${coin.i}:${coin.j}#${coin.serial}`;
 }
 const cacheMementos = new Map<string, CacheMemento>();
+const currentCacheState = new Map<string, CacheMemento>(); // For current state
+
 function saveCacheState(i: number, j: number, coins: Coin[]) {
   const key = `${i}:${j}`;
-  cacheMementos.set(key, { i, j, coins: [...coins] });
+  currentCacheState.set(key, { i, j, coins: [...coins] });
 }
+
 function getCacheState(i: number, j: number): CacheMemento | undefined {
-  return cacheMementos.get(`${i}:${j}`);
+  return currentCacheState.get(`${i}:${j}`);
 }
 
 // Initialize Map and UI
@@ -168,6 +172,7 @@ function enableGeolocation() {
 }
 
 // Reset game state function
+// Reset game state function
 function resetGameState() {
   const confirmation = prompt(
     "Type 'yes' reset the game state.",
@@ -179,14 +184,18 @@ function resetGameState() {
     );
 
     caches.forEach((cache) => {
-      const savedState = getCacheState(cache.i, cache.j);
-      if (savedState) {
-        cache.coins = [...savedState.coins];
+      const originalState = cacheMementos.get(`${cache.i}:${cache.j}`); // Retrieve original state
+      if (originalState) {
+        cache.coins = [...originalState.coins]; // Reset to original coins
+        saveCacheState(cache.i, cache.j, cache.coins); // Update current state with original
       }
+      const currentState = getCacheState(cache.i, cache.j); // Access current state for logging or debug
+      console.log(`Reset cache (${cache.i}, ${cache.j}):`, currentState);
+
       cache.layer.setPopupContent(createPopupContent(cache));
     });
 
-    movementHistory.setLatLngs([]);
+    movementHistory.setLatLngs([]); // Clear movement history
   }
 }
 
@@ -198,15 +207,18 @@ function spawnCache(lat: number, lng: number) {
     lat + TILE_DEGREES,
     lng + TILE_DEGREES,
   ]]);
-  const savedState = getCacheState(i, j);
-  const coins = savedState?.coins || Array.from(
-    { length: Math.floor(luck([i, j, "initialValue"].toString()) * 100) + 1 },
-    (_, serial) => ({ i, j, serial }),
-  );
+  const key = `${i}:${j}`;
+  const coins = cacheMementos.has(key)
+    ? cacheMementos.get(key)!.coins
+    : Array.from(
+      { length: Math.floor(luck([i, j, "initialValue"].toString()) * 100) + 1 },
+      (_, serial) => ({ i, j, serial }),
+    );
 
-  if (!savedState) {
-    saveCacheState(i, j, coins);
+  if (!cacheMementos.has(key)) {
+    cacheMementos.set(key, { i, j, coins: [...coins] }); // Store original state
   }
+  saveCacheState(i, j, coins); // Save current state
 
   const cache: Cache = {
     layer: leaflet.rectangle(bounds),
