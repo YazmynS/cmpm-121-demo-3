@@ -26,14 +26,55 @@ interface CacheMemento {
   coins: Coin[];
 }
 
-// Define Varaibles
+// Define Constants
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 const PLAYER_RADIUS = 0.0003;
-let playerCoins = 0;
-let playerPosition = OAKES_CLASSROOM;
+
+// GameState Class to Encapsulate State
+class GameState {
+  private _playerPosition: leaflet.LatLng;
+  private _playerCoins: number;
+
+  constructor(initialPosition: leaflet.LatLng) {
+    this._playerPosition = initialPosition;
+    this._playerCoins = 0;
+  }
+
+  get playerPosition(): leaflet.LatLng {
+    return this._playerPosition;
+  }
+
+  set playerPosition(newPosition: leaflet.LatLng) {
+    this._playerPosition = newPosition;
+  }
+
+  get playerCoins(): number {
+    return this._playerCoins;
+  }
+
+  addCoins(amount: number): void {
+    this._playerCoins += amount;
+  }
+
+  subtractCoins(amount: number): void {
+    if (this._playerCoins >= amount) {
+      this._playerCoins -= amount;
+    } else {
+      throw new Error("Not enough coins to subtract.");
+    }
+  }
+
+  reset(): void {
+    this._playerCoins = 0;
+    this._playerPosition = OAKES_CLASSROOM;
+  }
+}
+
+// Initialize GameState
+const gameState = new GameState(OAKES_CLASSROOM);
 
 // Flyweight Implementation
 const cellCache = new Map<string, { i: number; j: number }>();
@@ -114,7 +155,6 @@ function setupControls() {
 
   document.body.appendChild(controlsDiv);
 
-  // Toggle button to show/hide directional controls
   const toggleButton = document.createElement("button");
   toggleButton.innerText = "Show Controls";
   toggleButton.className = "control-button toggle-controls";
@@ -140,13 +180,15 @@ function createButton(label: string, onClick: () => void): HTMLButtonElement {
 
 // Move Player and Update Position
 function movePlayer(dLat: number, dLng: number) {
-  playerPosition = leaflet.latLng(
-    playerPosition.lat + dLat,
-    playerPosition.lng + dLng,
+  const newPosition = leaflet.latLng(
+    gameState.playerPosition.lat + dLat,
+    gameState.playerPosition.lng + dLng,
   );
-  playerMarker.setLatLng(playerPosition);
-  map.setView(playerPosition);
-  movementHistory.addLatLng(playerPosition);
+  gameState.playerPosition = newPosition;
+
+  playerMarker.setLatLng(gameState.playerPosition);
+  map.setView(gameState.playerPosition);
+  movementHistory.addLatLng(gameState.playerPosition);
   updateCacheLayers();
 }
 
@@ -155,13 +197,15 @@ function enableGeolocation() {
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition(
       (position) => {
-        playerPosition = leaflet.latLng(
+        const newPosition = leaflet.latLng(
           position.coords.latitude,
           position.coords.longitude,
         );
-        playerMarker.setLatLng(playerPosition);
-        map.setView(playerPosition);
-        movementHistory.addLatLng(playerPosition);
+        gameState.playerPosition = newPosition;
+
+        playerMarker.setLatLng(gameState.playerPosition);
+        map.setView(gameState.playerPosition);
+        movementHistory.addLatLng(gameState.playerPosition);
         updateCacheLayers();
       },
       (error) => alert("Geolocation error: " + error.message),
@@ -173,14 +217,10 @@ function enableGeolocation() {
 
 // Reset game state function
 function resetGameState() {
-  const confirmation = prompt(
-    "Type 'yes' reset the game state.",
-  );
+  const confirmation = prompt("Type 'yes' to reset the game state.");
   if (confirmation === "yes") {
-    playerCoins = 0;
-    alert(
-      "Game state has been reset.",
-    );
+    gameState.reset();
+    alert("Game state has been reset.");
 
     caches.forEach((cache) => {
       const originalState = cacheMementos.get(`${cache.i}:${cache.j}`);
@@ -244,28 +284,14 @@ function createPopupContent(cache: Cache) {
 }
 
 function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
-  document.querySelectorAll(".coin-id").forEach((element) => {
-    element.addEventListener(
-      "click",
-      () =>
-        map.setView(
-          leaflet.latLng(
-            parseInt(element.getAttribute("data-i")!) / 10000,
-            parseInt(element.getAttribute("data-j")!) / 10000,
-          ),
-          map.getZoom(),
-        ),
-    );
-  });
-
   document.getElementById(`collect-button-${cache.i}-${cache.j}`)
     ?.addEventListener("click", () => {
       if (cache.coins.length) {
-        playerCoins += cache.coins.length;
+        gameState.addCoins(cache.coins.length);
         cache.coins = [];
         rect.setPopupContent(createPopupContent(cache));
         saveCacheState(cache.i, cache.j, cache.coins);
-        alert(`Collected! You now have ${playerCoins} coins.`);
+        alert(`Collected! You now have ${gameState.playerCoins} coins.`);
       } else alert("No coins left in this cache.");
     });
 
@@ -279,8 +305,8 @@ function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
         alert("Please enter a valid number of coins to deposit.");
         return;
       }
-      if (playerCoins >= depositAmount) {
-        playerCoins -= depositAmount;
+      try {
+        gameState.subtractCoins(depositAmount);
         for (let serial = 0; serial < depositAmount; serial++) {
           cache.coins.push({
             i: cache.i,
@@ -291,9 +317,11 @@ function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
         rect.setPopupContent(createPopupContent(cache));
         saveCacheState(cache.i, cache.j, cache.coins);
         alert(
-          `Deposited ${depositAmount} coins! You now have ${playerCoins} coins.`,
+          `Deposited ${depositAmount} coins! You now have ${gameState.playerCoins} coins.`,
         );
-      } else alert("You don't have enough coins to deposit that amount.");
+      } catch (_error) {
+        alert("error");
+      }
       depositInput.value = "";
     });
 }
@@ -301,7 +329,9 @@ function setupPopupActions(cache: Cache, rect: leaflet.Rectangle) {
 // Update Cache Visibility Based on Player Position
 function updateCacheLayers() {
   caches.forEach((cache) => {
-    const distance = playerPosition.distanceTo(cache.bounds.getCenter());
+    const distance = gameState.playerPosition.distanceTo(
+      cache.bounds.getCenter(),
+    );
     if (distance <= PLAYER_RADIUS * 111000) {
       if (!map.hasLayer(cache.layer)) {
         map.addLayer(cache.layer);
